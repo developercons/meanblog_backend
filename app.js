@@ -4,6 +4,8 @@ var favicon = require('serve-favicon');
 var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
+var passport = require('passport');
+var authenticate = require('./authenticate');
 
 var index = require('./routes/index');
 var users = require('./routes/users');
@@ -39,6 +41,9 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.use(passport.initialize());
+app.use(passport.session());
+
 app.use('/', index);
 app.use('/users', users);
 app.use('/articles', articleRouter);
@@ -60,5 +65,18 @@ app.use(function(err, req, res, next) {
     res.status(err.status || 500);
     res.render('error');
 });
+
+function auth(req, res, next) {
+    console.log(req.user);
+    if (!req.user) {
+        var err = new Error('You are not authenticated!');
+        res.setHeader('WWW-Authenticate', 'Basic');
+
+        err.status = 401;
+        next(err);
+    } else {
+        next();
+    }
+}
 
 module.exports = app;
