@@ -1,8 +1,12 @@
 var express = require('express');
-var router = express.Router();
+var bodyParser = require('body-parser');
 var passport = require('passport');
-/*var User = require('../models/user');
-var userRouter = express.Router();
+var User = require('../models/user');
+var authenticate = require('../authenticate');
+
+var router = express.Router();
+router.use(bodyParser.json());
+/*var userRouter = express.Router();
 var Verify = require('./verify');*/
 
 /* GET users listing. */
@@ -19,6 +23,7 @@ router.post('/signup', function(req, res, next) {
                 res.json({ err: err });
             } else {
                 passport.authenticate('local')(req, res, () => {
+                    console.log(res);
                     res.statusCode = 200;
                     res.setHeader('Content-Type', 'application/json');
                     res.json({ success: true, status: 'Registration Successful!' });
@@ -32,6 +37,18 @@ router.post('/login', passport.authenticate('local'), (req, res) => {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.json({ success: true, status: 'You are successfully logged in!' });
+});
+
+router.get('/logout', (req, res) => {
+    if (req.session) {
+        req.session.destroy();
+        res.clearCookie('session-id');
+        res.redirect('/');
+    } else {
+        var err = new Error('You are not logged in!');
+        err.status = 403;
+        next(err);
+    }
 });
 
 
