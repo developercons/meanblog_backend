@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const authenticate = require('../authenticate');
 
 const Articles = require('../models/articles');
 
@@ -11,16 +12,18 @@ articleRouter.use = (bodyParser.json());
 articleRouter.route('/')
 
 .get((req, res, next) => {
-        Articles.find({})
-            .then((articles) => {
-                res.statusCode = 200;
-                console.log("hello");
-                res.setHeader('Content-Type', 'application/json');
-                res.json(articles);
-            }, (err) => next(err))
-            .catch((err) => next(err));
-    })
-    .post((req, res, next) => {
+    Articles.find({})
+        //.populate('comments.author')
+        .then((articles) => {
+            res.statusCode = 200;
+            console.log("hello");
+            res.setHeader('Content-Type', 'application/json');
+            res.json(articles);
+        }, (err) => next(err))
+        .catch((err) => next(err));
+})
+
+.post(authenticate.verifyUser, (req, res, next) => {
         Articles.create(req.body)
             .then((article) => {
                 console.log('Article Created', article);
@@ -30,11 +33,11 @@ articleRouter.route('/')
             }, (err) => next(err))
             .catch((err) => next(err));
     })
-    .put((req, res, next) => {
+    .put(authenticate.verifyUser, (req, res, next) => {
         res.statusCode = 403;
         res.end('Put operation does not supported on articles');
     })
-    .delete((req, res, next) => {
+    .delete(authenticate.verifyUser, (req, res, next) => {
         Articles.remove({})
             .then((resp) => {
                 res.statusCode = 200;
@@ -45,9 +48,9 @@ articleRouter.route('/')
     })
 
 articleRouter.route('/:articleId')
-
-.get((req, res, next) => {
+    .get((req, res, next) => {
         Articles.findById(req.params.articleId)
+            .populate('comments.author')
             .then((articles) => {
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
@@ -55,11 +58,11 @@ articleRouter.route('/:articleId')
             }, (err) => next(err))
             .catch((err) => next(err));
     })
-    .post((req, res, next) => {
+    .post(authenticate.verifyUser, (req, res, next) => {
         res.statusCode = 403;
         res.end('Post operation does not supported on /articles/' + req.params.articleId);
     })
-    .put((req, res, next) => {
+    .put(authenticate.verifyUser, (req, res, next) => {
         Articles.findByIdAndUpdate(req.params.articleId, {
                 $set: req.body
             }, { new: true })
@@ -70,7 +73,7 @@ articleRouter.route('/:articleId')
             }, (err) => next(err))
             .catch((err) => next(err));
     })
-    .delete((req, res, next) => {
+    .delete(authenticate.verifyUser, (req, res, next) => {
         Articles.findByIdAndRemove(req.params.articleId)
             .then((resp) => {
                 res.statusCode = 200;
@@ -85,6 +88,7 @@ articleRouter.route('/:articleId')
 articleRouter.route('/:articleId/comments')
     .get((req, res, next) => {
         Articles.findById(req.params.articleId)
+            .populate('comments.author')
             .then((articles) => {
                 if (articles != null) {
                     res.statusCode = 200;
@@ -98,10 +102,11 @@ articleRouter.route('/:articleId/comments')
             }, (err) => next(err))
             .catch((err) => next(err));
     })
-    .post((req, res, next) => {
+    .post(authenticate.verifyUser, (req, res, next) => {
         Articles.findById(req.params.articleId)
             .then((article) => {
                     if (article != null) {
+                        req.body.author = req.user._id;
                         article.comments.push(req.body);
                         article.save()
                             .then((article) => {
@@ -118,11 +123,11 @@ articleRouter.route('/:articleId/comments')
                 (err) => next(err))
             .catch((err) => next(err));
     })
-    .put((req, res, next) => {
+    .put(authenticate.verifyUser, (req, res, next) => {
         res.statusCode = 403;
         res.end('Put operation does not supported on articles/comments');
     })
-    .delete((req, res, next) => {
+    .delete(authenticate.verifyUser, (req, res, next) => {
         Articles.findById(req.params.articleId)
             .then(() => {
                 if (article != null) {
@@ -147,6 +152,7 @@ articleRouter.route('/:articleId/comments')
 articleRouter.route('/:articleId/comments/:commentId')
     .get((req, res, next) => {
         Articles.findById(req.params.articleId)
+            .populate('comments.author')
             .then((articles) => {
                 if (articles != null && articles.comments.id(req.params.commentId) != null) {
                     res.statusCode = 200;
@@ -164,11 +170,11 @@ articleRouter.route('/:articleId/comments/:commentId')
             }, (err) => next(err))
             .catch((err) => next(err));
     })
-    .post((req, res, next) => {
+    .post(authenticate.verifyUser, (req, res, next) => {
         res.statusCode = 403;
         res.end('Post operation does not supported on /articles/' + req.params.articleId);
     })
-    .put((req, res, next) => {
+    .put(authenticate.verifyUser, (req, res, next) => {
         Articles.findById(req.params.articleId)
             .then((articles) => {
                 if (articles != null && articles.comments.id(req.params.commentId) != null) {
@@ -193,13 +199,27 @@ articleRouter.route('/:articleId/comments/:commentId')
             }, (err) => next(err))
             .catch((err) => next(err));
     })
-    /*.delete((req, res, next) => {
-        Articles.findByIdAndRemove(req.params.articleId)
-            .then((resp) => {
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                res.json(resp);
+    .delete(authenticate.verifyUser, (req, res, next) => {
+        Articles.findById(req.params.articleId)
+            .then((articles) => {
+                if (articles != null && articles.comments.id(req.params.commentId) != null) {
+                    articles.comments.id(req.params.commentId).remove();
+                    articles.save()
+                        .then((articles) => {
+                            res.statusCode = 200;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.json(articles);
+                        }, (err) => next(err));
+                } else if (articles == null) {
+                    err = new Error('Articles ' + req.params.articleId + ' not found');
+                    err.status = 404;
+                    return next(err);
+                } else {
+                    err = new Error('Comment ' + req.params.commentId + ' not found');
+                    err.status = 404;
+                    return next(err);
+                }
             }, (err) => next(err))
             .catch((err) => next(err));
-    });*/
+    });
 module.exports = articleRouter;
